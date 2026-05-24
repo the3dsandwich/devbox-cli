@@ -125,6 +125,50 @@ describe("devbox routes", () => {
     expect(res.statusCode).toBe(409);
   });
 
+  it("GET /devboxes/:name returns 404 for unknown", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/devboxes/ghost",
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("GET /devboxes/:name returns devbox with url field", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/devboxes",
+      headers: { authorization: `Bearer ${TOKEN}` },
+      payload: { name: "url-box", ssh_key: "ssh-ed25519 AAAA..." },
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/devboxes/url-box",
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.name).toBe("url-box");
+    expect(body).toHaveProperty("url");
+  });
+
+  it("GET /devboxes includes url field in list", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/devboxes",
+      headers: { authorization: `Bearer ${TOKEN}` },
+      payload: { name: "list-box", ssh_key: "ssh-ed25519 AAAA..." },
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/devboxes",
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Array<{ url: unknown }>;
+    expect(body.every((d) => "url" in d)).toBe(true);
+  });
+
   it("DELETE /devboxes/:name returns 404 for unknown", async () => {
     const res = await app.inject({
       method: "DELETE",
@@ -132,5 +176,21 @@ describe("devbox routes", () => {
       headers: { authorization: `Bearer ${TOKEN}` },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("DELETE /devboxes/:name destroys existing devbox", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/devboxes",
+      headers: { authorization: `Bearer ${TOKEN}` },
+      payload: { name: "del-box", ssh_key: "ssh-ed25519 AAAA..." },
+    });
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/devboxes/del-box",
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(mockProxmox.destroyVm).toHaveBeenCalledOnce();
   });
 });

@@ -30,7 +30,7 @@ program
         d.name,
         statusColor(d.status),
         d.ip ?? "-",
-        d.ip ? chalk.cyan(`http://${d.name}.devbox.local`) : "-",
+        d.url ? chalk.cyan(d.url) : "-",
       ]);
     }
     console.log(table.toString());
@@ -69,7 +69,7 @@ program
           process.stdout.write("\r" + " ".repeat(50) + "\r");
           console.log(`${chalk.green("✓")} ${chalk.bold(name)} is running`);
           console.log(`  IP:      ${devbox.ip}`);
-          console.log(`  VS Code: ${chalk.cyan(`http://${name}.devbox.local`)}`);
+          if (devbox.url) console.log(`  VS Code: ${chalk.cyan(devbox.url)}`);
           return;
         }
         if (devbox.status === "stopped") {
@@ -95,7 +95,7 @@ program
     console.log(`${chalk.bold(devbox.name)}  ${statusColor(devbox.status)}`);
     if (devbox.ip) {
       console.log(`  IP:      ${devbox.ip}`);
-      console.log(`  VS Code: ${chalk.cyan(`http://${devbox.name}.devbox.local`)}`);
+      if (devbox.url) console.log(`  VS Code: ${chalk.cyan(devbox.url)}`);
     }
   });
 
@@ -112,9 +112,8 @@ program
   .description("Print VS Code URL for a devbox")
   .action(async (name: string) => {
     const devbox = await getApiClient().get(name).catch(die);
-    if (!devbox.ip) { console.error("Devbox has no IP yet."); process.exit(1); }
-    const url = `http://${devbox.name}.devbox.local`;
-    console.log(chalk.cyan(url));
+    if (!devbox.url) { console.error("Devbox has no URL yet."); process.exit(1); }
+    console.log(chalk.cyan(devbox.url));
   });
 
 program

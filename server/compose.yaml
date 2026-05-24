@@ -12,6 +12,7 @@ services:
       PROXMOX_TEMPLATE_VMID: ${PROXMOX_TEMPLATE_VMID:-200}
       API_TOKEN: ${API_TOKEN}
       CADDY_ADMIN_URL: http://caddy:2019
+      DEVBOX_DOMAIN: ${DEVBOX_DOMAIN:-devbox.local}
       DB_PATH: /data/devbox.db
     volumes:
       - devbox-data:/data
