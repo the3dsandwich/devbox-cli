@@ -1,4 +1,5 @@
 import axios from "axios";
+import https from "https";
 
 export interface ProxmoxConfig {
   host: string;
@@ -23,7 +24,7 @@ export const createProxmoxClient = (config: ProxmoxConfig): ProxmoxClient => {
   const client = axios.create({
     baseURL: `https://${config.host}:8006/api2/json`,
     headers: { Authorization: `PVEAPIToken=${config.tokenId}=${config.tokenSecret}` },
-    httpsAgent: new (await import("https")).Agent({ rejectUnauthorized: false }),
+    httpsAgent: new https.Agent({ rejectUnauthorized: false }),
   });
 
   const nodeBase = `/nodes/${config.node}`;
