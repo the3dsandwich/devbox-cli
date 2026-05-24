@@ -1,0 +1,30 @@
+services:
+  devbox-server:
+    image: ghcr.io/the3dsandwich/devbox-cli/server:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PROXMOX_HOST: ${PROXMOX_HOST}
+      PROXMOX_TOKEN_ID: ${PROXMOX_TOKEN_ID}
+      PROXMOX_TOKEN_SECRET: ${PROXMOX_TOKEN_SECRET}
+      PROXMOX_NODE: ${PROXMOX_NODE:-pve}
+      PROXMOX_TEMPLATE_VMID: ${PROXMOX_TEMPLATE_VMID:-200}
+      API_TOKEN: ${API_TOKEN}
+      CADDY_ADMIN_URL: http://caddy:2019
+      DB_PATH: /data/devbox.db
+    volumes:
+      - devbox-data:/data
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+
+volumes:
+  devbox-data:
+  caddy-data:

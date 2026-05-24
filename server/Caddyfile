@@ -1,0 +1,5 @@
+*.devbox.local {
+	reverse_proxy {
+		dynamic a
+	}
+}
