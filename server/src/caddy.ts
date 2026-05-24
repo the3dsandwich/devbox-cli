@@ -5,37 +5,50 @@ export interface CaddyClient {
   removeRoute: (subdomain: string) => Promise<void>;
 }
 
+type CaddyRoute = {
+  match?: { host?: string[] }[];
+  handle?: unknown[];
+  _subdomain?: string;
+};
+
 export const createCaddyClient = (adminUrl: string): CaddyClient => {
   const client = axios.create({ baseURL: adminUrl });
 
-  const ensureRoutesExist = async () => {
+  const getRoutes = async (): Promise<CaddyRoute[]> => {
     try {
-      await client.get("/config/apps/http/servers/devbox/routes");
+      const res = await client.get("/config/apps/http/servers/devbox/routes");
+      return res.data ?? [];
     } catch {
-      // initialize the server config with an empty routes array
+      return [];
+    }
+  };
+
+  const putRoutes = async (routes: CaddyRoute[]) => {
+    try {
+      await client.put("/config/apps/http/servers/devbox/routes", routes);
+    } catch {
+      // server block doesn't exist yet — create it
       await client.put("/config/apps/http/servers/devbox", {
         listen: [":80"],
-        routes: [],
+        routes,
       });
     }
   };
 
   const addRoute = async (subdomain: string, targetHost: string, targetPort: number, domain = "devbox.local") => {
-    await ensureRoutesExist();
-    await client.post("/config/apps/http/servers/devbox/routes/...", {
-      "@id": subdomain,
+    const routes = await getRoutes();
+    const filtered = routes.filter((r) => r._subdomain !== subdomain);
+    const newRoute: CaddyRoute = {
+      _subdomain: subdomain,
       match: [{ host: [`${subdomain}.${domain}`] }],
-      handle: [
-        {
-          handler: "reverse_proxy",
-          upstreams: [{ dial: `${targetHost}:${targetPort}` }],
-        },
-      ],
-    });
+      handle: [{ handler: "reverse_proxy", upstreams: [{ dial: `${targetHost}:${targetPort}` }] }],
+    };
+    await putRoutes([...filtered, newRoute]);
   };
 
   const removeRoute = async (subdomain: string) => {
-    await client.delete(`/id/${subdomain}`);
+    const routes = await getRoutes();
+    await putRoutes(routes.filter((r) => r._subdomain !== subdomain));
   };
 
   return { addRoute, removeRoute };
