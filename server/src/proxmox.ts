@@ -29,12 +29,23 @@ export const createProxmoxClient = (config: ProxmoxConfig): ProxmoxClient => {
 
   const nodeBase = `/nodes/${config.node}`;
 
+  const waitForUnlock = async (vmid: number, timeoutMs = 60000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const res = await client.get(`${nodeBase}/qemu/${vmid}/config`);
+      if (!res.data?.data?.lock) return;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    throw new Error(`VM ${vmid} still locked after ${timeoutMs}ms`);
+  };
+
   const cloneVm = async (name: string, vmid: number) => {
     await client.post(`${nodeBase}/qemu/${config.templateVmid}/clone`, {
       newid: vmid,
       name,
       full: 1,
     });
+    await waitForUnlock(vmid);
   };
 
   const setCloudInit = async (vmid: number, sshKey: string) => {
