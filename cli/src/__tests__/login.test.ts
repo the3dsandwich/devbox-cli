@@ -66,7 +66,7 @@ describe("login", () => {
   it("prefers DEVBOX_SSH_KEY over auto-detected key", async () => {
     process.env.DEVBOX_TOKEN = "tok";
     process.env.DEVBOX_SSH_KEY = "ssh-ed25519 OVERRIDE...";
-    mockReadFileSync.mockReturnValue("ssh-ed25519 DETECTED..." as unknown as Buffer);
+    mockReadFileSync.mockReturnValue("ssh-ed25519 DETECTED..." as unknown as ReturnType<typeof readFileSync>);
 
     await login("http://server.local");
 
@@ -75,7 +75,7 @@ describe("login", () => {
 
   it("falls back to auto-detected SSH key when no env var set", async () => {
     process.env.DEVBOX_TOKEN = "tok";
-    mockReadFileSync.mockReturnValue("ssh-ed25519 AUTODETECT key@host\n" as unknown as Buffer);
+    mockReadFileSync.mockReturnValue("ssh-ed25519 AUTODETECT key@host\n" as unknown as ReturnType<typeof readFileSync>);
 
     await login("http://server.local");
 

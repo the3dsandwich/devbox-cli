@@ -39,11 +39,52 @@ program
 program
   .command("create <name>")
   .description("Create a new devbox")
-  .action(async (name: string) => {
+  .option("--no-wait", "return immediately after request instead of waiting for running state")
+  .action(async (name: string, opts: { wait: boolean }) => {
     const sshKey = getSshKey();
-    console.log(`Creating devbox ${chalk.bold(name)}...`);
-    const devbox = await getApiClient().create(name, sshKey).catch(die);
-    console.log(`Provisioning started. Check status with: devbox status ${devbox.name}`);
+    const api = getApiClient();
+    await api.create(name, sshKey).catch(die);
+
+    if (!opts.wait) {
+      console.log(`Provisioning started. Check status with: devbox status ${name}`);
+      return;
+    }
+
+    const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let frame = 0;
+    const interval = setInterval(() => {
+      process.stdout.write(`\r${frames[frame++ % frames.length]} Provisioning ${chalk.bold(name)}...`);
+    }, 100);
+
+    const timeoutMs = 5 * 60 * 1000;
+    const deadline = Date.now() + timeoutMs;
+
+    try {
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const devbox = await api.get(name).catch(() => null);
+        if (!devbox) continue;
+        if (devbox.status === "running") {
+          clearInterval(interval);
+          process.stdout.write("\r" + " ".repeat(50) + "\r");
+          console.log(`${chalk.green("✓")} ${chalk.bold(name)} is running`);
+          console.log(`  IP:      ${devbox.ip}`);
+          console.log(`  VS Code: ${chalk.cyan(`http://${name}.devbox.local`)}`);
+          return;
+        }
+        if (devbox.status === "stopped") {
+          clearInterval(interval);
+          process.stdout.write("\r" + " ".repeat(50) + "\r");
+          die(new Error(`Provisioning failed — check server logs`));
+        }
+      }
+      clearInterval(interval);
+      process.stdout.write("\r" + " ".repeat(50) + "\r");
+      die(new Error(`Timed out waiting for ${name} to start`));
+    } catch (err) {
+      clearInterval(interval);
+      throw err;
+    }
   });
 
 program
