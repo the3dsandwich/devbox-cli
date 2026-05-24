@@ -7,7 +7,7 @@ import { createApiClient } from "../api.js";
 
 const prompt = (question: string, fallback?: string): Promise<string> =>
   new Promise((resolve) => {
-    if (fallback) { resolve(fallback); return; }
+    if (fallback != null && fallback !== "") { resolve(fallback); return; }
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     rl.question(question, (answer) => { rl.close(); resolve(answer.trim()); });
   });
@@ -23,16 +23,15 @@ export const login = async (serverUrl: string) => {
     "API token (or set DEVBOX_TOKEN): ",
     process.env.DEVBOX_TOKEN
   );
+  if (!token) throw new Error("API token is required");
 
   const detectedKey = defaultSshKey();
-  const sshKey = await prompt(
+  const sshKeyFallback = process.env.DEVBOX_SSH_KEY || detectedKey;
+  const sshKey = sshKeyFallback ?? await prompt(
     detectedKey
       ? `SSH public key [${detectedKey.split(" ").slice(0, 2).join(" ").slice(0, 40)}...]: `
-      : "SSH public key (e.g. contents of ~/.ssh/id_ed25519.pub, or set DEVBOX_SSH_KEY): ",
-    process.env.DEVBOX_SSH_KEY ?? detectedKey
+      : "SSH public key (e.g. contents of ~/.ssh/id_ed25519.pub, or set DEVBOX_SSH_KEY): "
   );
-
-  if (!token) throw new Error("API token is required");
   if (!sshKey) throw new Error("SSH public key is required");
 
   const client = createApiClient(serverUrl, token);
