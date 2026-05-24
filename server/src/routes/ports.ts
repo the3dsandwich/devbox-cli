@@ -7,7 +7,7 @@ const exposeSchema = z.object({ port: z.number().int().min(1).max(65535) });
 
 export const portRoutes = async (
   app: FastifyInstance,
-  { caddy }: { caddy: CaddyClient }
+  { caddy, domain }: { caddy: CaddyClient; domain: string }
 ) => {
   app.post("/devboxes/:name/ports", async (req, reply) => {
     const { name } = req.params as { name: string };
@@ -24,12 +24,12 @@ export const portRoutes = async (
     const { port } = body.data;
     const subdomain = `${name}-${port}`;
 
-    await caddy.addRoute(subdomain, devbox.ip, port);
+    await caddy.addRoute(subdomain, devbox.ip, port, domain);
     db.prepare(
       "INSERT OR REPLACE INTO exposed_ports (devbox_id, port, subdomain) VALUES (?, ?, ?)"
     ).run(devbox.id, port, subdomain);
 
-    return { subdomain, url: `http://${subdomain}.devbox.local` };
+    return { subdomain, url: `http://${subdomain}.${domain}` };
   });
 
   app.delete("/devboxes/:name/ports/:port", async (req, reply) => {

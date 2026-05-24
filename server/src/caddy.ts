@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export interface CaddyClient {
-  addRoute: (subdomain: string, targetHost: string, targetPort: number) => Promise<void>;
+  addRoute: (subdomain: string, targetHost: string, targetPort: number, domain?: string) => Promise<void>;
   removeRoute: (subdomain: string) => Promise<void>;
 }
 
@@ -20,11 +20,11 @@ export const createCaddyClient = (adminUrl: string): CaddyClient => {
     }
   };
 
-  const addRoute = async (subdomain: string, targetHost: string, targetPort: number) => {
+  const addRoute = async (subdomain: string, targetHost: string, targetPort: number, domain = "devbox.local") => {
     await ensureRoutesExist();
     await client.post("/config/apps/http/servers/devbox/routes/...", {
       "@id": subdomain,
-      match: [{ host: [`${subdomain}.devbox.local`] }],
+      match: [{ host: [`${subdomain}.${domain}`] }],
       handle: [
         {
           handler: "reverse_proxy",

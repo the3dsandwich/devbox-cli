@@ -26,6 +26,7 @@ export const buildApp = async () => {
   });
 
   const caddy = createCaddyClient(process.env.CADDY_ADMIN_URL ?? "http://localhost:2019");
+  const domain = process.env.DEVBOX_DOMAIN ?? "devbox.local";
 
   const token = requiredEnv("API_TOKEN");
 
@@ -37,8 +38,8 @@ export const buildApp = async () => {
 
   app.get("/health", async () => ({ ok: true }));
 
-  await app.register(devboxRoutes, { proxmox, caddy });
-  await app.register(portRoutes, { caddy });
+  await app.register(devboxRoutes, { proxmox, caddy, domain });
+  await app.register(portRoutes, { caddy, domain });
 
   return app;
 };

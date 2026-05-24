@@ -6,6 +6,7 @@ export interface DevboxRecord {
   name: string;
   proxmox_vmid: number;
   ip: string | null;
+  url: string | null;
   status: string;
   created_at: string;
 }

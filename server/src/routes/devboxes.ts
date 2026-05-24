@@ -10,13 +10,19 @@ const createSchema = z.object({
   ssh_key: z.string().min(1),
 });
 
+const devboxUrl = (name: string, ip: string | null, domain: string) =>
+  ip ? `http://${name}.${domain}` : null;
+
 export const devboxRoutes = async (
   app: FastifyInstance,
-  { proxmox, caddy }: { proxmox: ProxmoxClient; caddy: CaddyClient }
+  { proxmox, caddy, domain }: { proxmox: ProxmoxClient; caddy: CaddyClient; domain: string }
 ) => {
   app.get("/devboxes", async () => {
     const db = getDb();
-    return db.prepare("SELECT * FROM devboxes ORDER BY created_at DESC").all();
+    const rows = db.prepare("SELECT * FROM devboxes ORDER BY created_at DESC").all() as Array<{
+      name: string; ip: string | null; [key: string]: unknown;
+    }>;
+    return rows.map((d) => ({ ...d, url: devboxUrl(d.name, d.ip, domain) }));
   });
 
   app.post("/devboxes", async (req, reply) => {
@@ -53,7 +59,7 @@ export const devboxRoutes = async (
 
         if (ip) {
           db.prepare("UPDATE devboxes SET ip = ?, status = 'running' WHERE id = ?").run(ip, id);
-          await caddy.addRoute(name, ip, 8080);
+          await caddy.addRoute(name, ip, 8080, domain);
         } else {
           db.prepare("UPDATE devboxes SET status = 'running' WHERE id = ?").run(id);
         }
@@ -69,9 +75,11 @@ export const devboxRoutes = async (
   app.get("/devboxes/:name", async (req, reply) => {
     const { name } = req.params as { name: string };
     const db = getDb();
-    const devbox = db.prepare("SELECT * FROM devboxes WHERE name = ?").get(name);
+    const devbox = db.prepare("SELECT * FROM devboxes WHERE name = ?").get(name) as
+      | { name: string; ip: string | null; [key: string]: unknown }
+      | undefined;
     if (!devbox) return reply.status(404).send({ error: "not found" });
-    return devbox;
+    return { ...devbox, url: devboxUrl(devbox.name, devbox.ip, domain) };
   });
 
   app.delete("/devboxes/:name", async (req, reply) => {
