@@ -76,6 +76,24 @@ describe("setCloudInit", () => {
   });
 });
 
+describe("stopVm", () => {
+  it("posts to status/stop endpoint", async () => {
+    mockPost.mockResolvedValue({});
+    const client = createProxmoxClient(config);
+    await client.stopVm(301);
+    expect(mockPost).toHaveBeenCalledWith("/nodes/pve/qemu/301/status/stop");
+  });
+});
+
+describe("destroyVm", () => {
+  it("deletes the VM", async () => {
+    mockDelete.mockResolvedValue({});
+    const client = createProxmoxClient(config);
+    await client.destroyVm(301);
+    expect(mockDelete).toHaveBeenCalledWith("/nodes/pve/qemu/301");
+  });
+});
+
 describe("nextVmid", () => {
   it("returns parsed integer from cluster/nextid", async () => {
     mockGet.mockResolvedValue({ data: { data: "305" } });

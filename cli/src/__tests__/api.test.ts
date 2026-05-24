@@ -50,6 +50,14 @@ describe("createApiClient", () => {
     expect(result.url).toBe("http://test-3000.devbox.local");
   });
 
+  it("get calls GET /devboxes/:name", async () => {
+    const devbox = { id: "1", name: "test", status: "running", ip: "10.0.0.1", url: "http://test.devbox.local" };
+    mockClient.get.mockResolvedValue({ data: devbox });
+    const result = await client().get("test");
+    expect(mockClient.get).toHaveBeenCalledWith("/devboxes/test");
+    expect(result).toEqual(devbox);
+  });
+
   it("unexpose calls DELETE /devboxes/:name/ports/:port", async () => {
     mockClient.delete.mockResolvedValue({ data: undefined });
     await client().unexpose("test", 3000);
