@@ -77,12 +77,38 @@ describe("setCloudInit", () => {
 });
 
 describe("stopVm", () => {
-  it("posts to status/stop endpoint", async () => {
+  it("posts to status/stop and waits until stopped", async () => {
     mockPost.mockResolvedValue({});
+    // first poll: running, second poll: stopped
+    mockGet
+      .mockResolvedValueOnce({ data: { data: { status: "running" } } })
+      .mockResolvedValueOnce({ data: { data: { status: "stopped" } } });
+
     const client = createProxmoxClient(config);
     await client.stopVm(301);
+
     expect(mockPost).toHaveBeenCalledWith("/nodes/pve/qemu/301/status/stop");
+    expect(mockGet).toHaveBeenCalledWith("/nodes/pve/qemu/301/status/current");
+    expect(mockGet).toHaveBeenCalledTimes(2);
   });
+
+  it("resolves immediately when VM is already stopped", async () => {
+    mockPost.mockResolvedValue({});
+    mockGet.mockResolvedValueOnce({ data: { data: { status: "stopped" } } });
+
+    const client = createProxmoxClient(config);
+    await client.stopVm(301);
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws if VM does not stop before timeout", async () => {
+    mockPost.mockResolvedValue({});
+    mockGet.mockResolvedValue({ data: { data: { status: "running" } } });
+
+    const client = createProxmoxClient(config);
+    await expect(client.stopVm(301, 100)).rejects.toThrow("still running");
+  }, 10000);
 });
 
 describe("destroyVm", () => {

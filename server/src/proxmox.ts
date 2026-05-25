@@ -14,7 +14,7 @@ export interface ProxmoxClient {
   cloneVm: (name: string, vmid: number, lockTimeoutMs?: number) => Promise<void>;
   setCloudInit: (vmid: number, sshKey: string) => Promise<void>;
   startVm: (vmid: number) => Promise<void>;
-  stopVm: (vmid: number) => Promise<void>;
+  stopVm: (vmid: number, timeoutMs?: number) => Promise<void>;
   destroyVm: (vmid: number) => Promise<void>;
   getVmIp: (vmid: number) => Promise<string | null>;
   nextVmid: () => Promise<number>;
@@ -59,8 +59,19 @@ export const createProxmoxClient = (config: ProxmoxConfig): ProxmoxClient => {
     await client.post(`${nodeBase}/qemu/${vmid}/status/start`);
   };
 
-  const stopVm = async (vmid: number) => {
+  const waitForStop = async (vmid: number, timeoutMs = 30000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const res = await client.get(`${nodeBase}/qemu/${vmid}/status/current`);
+      if (res.data?.data?.status === "stopped") return;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    throw new Error(`VM ${vmid} still running after ${timeoutMs}ms`);
+  };
+
+  const stopVm = async (vmid: number, timeoutMs = 30000) => {
     await client.post(`${nodeBase}/qemu/${vmid}/status/stop`);
+    await waitForStop(vmid, timeoutMs);
   };
 
   const destroyVm = async (vmid: number) => {
