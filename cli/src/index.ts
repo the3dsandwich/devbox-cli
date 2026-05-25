@@ -103,8 +103,21 @@ program
   .command("destroy <name>")
   .description("Destroy a devbox")
   .action(async (name: string) => {
-    await getApiClient().destroy(name).catch(die);
-    console.log(`Destroyed ${chalk.bold(name)}.`);
+    const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let frame = 0;
+    const interval = setInterval(() => {
+      process.stdout.write(`\r${frames[frame++ % frames.length]} Destroying ${chalk.bold(name)}...`);
+    }, 100);
+    try {
+      await getApiClient().destroy(name);
+      clearInterval(interval);
+      process.stdout.write("\r" + " ".repeat(50) + "\r");
+      console.log(`${chalk.green("✓")} Destroyed ${chalk.bold(name)}.`);
+    } catch (err) {
+      clearInterval(interval);
+      process.stdout.write("\r" + " ".repeat(50) + "\r");
+      die(err);
+    }
   });
 
 program
