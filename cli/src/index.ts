@@ -5,6 +5,7 @@ import Table from "cli-table3";
 import { login } from "./commands/login.js";
 import { getApiClient } from "./api.js";
 import { getSshKey } from "./config.js";
+import { withSpinner } from "./spinner.js";
 
 const program = new Command();
 
@@ -50,41 +51,23 @@ program
       return;
     }
 
-    const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    let frame = 0;
-    const interval = setInterval(() => {
-      process.stdout.write(`\r${frames[frame++ % frames.length]} Provisioning ${chalk.bold(name)}...`);
-    }, 100);
-
     const timeoutMs = 5 * 60 * 1000;
     const deadline = Date.now() + timeoutMs;
 
-    try {
+    const devbox = await withSpinner(`Provisioning ${chalk.bold(name)}`, async () => {
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 3000));
-        const devbox = await api.get(name).catch(() => null);
-        if (!devbox) continue;
-        if (devbox.status === "running") {
-          clearInterval(interval);
-          process.stdout.write("\r" + " ".repeat(50) + "\r");
-          console.log(`${chalk.green("✓")} ${chalk.bold(name)} is running`);
-          console.log(`  IP:      ${devbox.ip}`);
-          if (devbox.url) console.log(`  VS Code: ${chalk.cyan(devbox.url)}`);
-          return;
-        }
-        if (devbox.status === "stopped") {
-          clearInterval(interval);
-          process.stdout.write("\r" + " ".repeat(50) + "\r");
-          die(new Error(`Provisioning failed — check server logs`));
-        }
+        const d = await api.get(name).catch(() => null);
+        if (!d) continue;
+        if (d.status === "running") return d;
+        if (d.status === "stopped") throw new Error("Provisioning failed — check server logs");
       }
-      clearInterval(interval);
-      process.stdout.write("\r" + " ".repeat(50) + "\r");
-      die(new Error(`Timed out waiting for ${name} to start`));
-    } catch (err) {
-      clearInterval(interval);
-      throw err;
-    }
+      throw new Error(`Timed out waiting for ${name} to start`);
+    }).catch(die);
+
+    console.log(`${chalk.green("✓")} ${chalk.bold(name)} is running`);
+    console.log(`  IP:      ${devbox.ip}`);
+    if (devbox.url) console.log(`  VS Code: ${chalk.cyan(devbox.url)}`);
   });
 
 program
@@ -103,21 +86,8 @@ program
   .command("destroy <name>")
   .description("Destroy a devbox")
   .action(async (name: string) => {
-    const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-    let frame = 0;
-    const interval = setInterval(() => {
-      process.stdout.write(`\r${frames[frame++ % frames.length]} Destroying ${chalk.bold(name)}...`);
-    }, 100);
-    try {
-      await getApiClient().destroy(name);
-      clearInterval(interval);
-      process.stdout.write("\r" + " ".repeat(50) + "\r");
-      console.log(`${chalk.green("✓")} Destroyed ${chalk.bold(name)}.`);
-    } catch (err) {
-      clearInterval(interval);
-      process.stdout.write("\r" + " ".repeat(50) + "\r");
-      die(err);
-    }
+    await withSpinner(`Destroying ${chalk.bold(name)}`, () => getApiClient().destroy(name)).catch(die);
+    console.log(`${chalk.green("✓")} Destroyed ${chalk.bold(name)}.`);
   });
 
 program
