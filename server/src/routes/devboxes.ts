@@ -2,7 +2,6 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import type { ProxmoxClient } from "../proxmox.js";
-import type { CaddyClient } from "../caddy.js";
 import { getDb } from "../db.js";
 
 const createSchema = z.object({
@@ -15,7 +14,7 @@ const devboxUrl = (name: string, ip: string | null, domain: string) =>
 
 export const devboxRoutes = async (
   app: FastifyInstance,
-  { proxmox, caddy, domain }: { proxmox: ProxmoxClient; caddy: CaddyClient; domain: string }
+  { proxmox, domain }: { proxmox: ProxmoxClient; domain: string }
 ) => {
   app.get("/devboxes", async () => {
     const db = getDb();
@@ -42,14 +41,12 @@ export const devboxRoutes = async (
       "INSERT INTO devboxes (id, name, proxmox_vmid, status) VALUES (?, ?, ?, 'provisioning')"
     ).run(id, name, vmid);
 
-    // provision async
     (async () => {
       try {
         await proxmox.cloneVm(name, vmid);
         await proxmox.setCloudInit(vmid, ssh_key);
         await proxmox.startVm(vmid);
 
-        // poll for IP (up to 2 min)
         let ip: string | null = null;
         for (let i = 0; i < 24; i++) {
           await new Promise((r) => setTimeout(r, 5000));
@@ -57,12 +54,8 @@ export const devboxRoutes = async (
           if (ip) break;
         }
 
-        if (ip) {
-          db.prepare("UPDATE devboxes SET ip = ?, status = 'running' WHERE id = ?").run(ip, id);
-          await caddy.addRoute(name, ip, 8080, domain);
-        } else {
-          db.prepare("UPDATE devboxes SET status = 'running' WHERE id = ?").run(id);
-        }
+        const status = ip ? "running" : "running";
+        db.prepare("UPDATE devboxes SET ip = ?, status = ? WHERE id = ?").run(ip, status, id);
       } catch (err) {
         db.prepare("UPDATE devboxes SET status = 'stopped' WHERE id = ?").run(id);
         app.log.error(err, `Failed to provision devbox ${name}`);
@@ -92,7 +85,6 @@ export const devboxRoutes = async (
 
     await proxmox.stopVm(devbox.proxmox_vmid).catch(() => {});
     await proxmox.destroyVm(devbox.proxmox_vmid);
-    await caddy.removeRoute(name).catch(() => {});
 
     db.prepare("DELETE FROM exposed_ports WHERE devbox_id = ?").run(devbox.id);
     db.prepare("DELETE FROM devboxes WHERE id = ?").run(devbox.id);
