@@ -11,13 +11,8 @@ const mockProxmox = {
   nextVmid: vi.fn().mockResolvedValue(301),
 };
 
-const mockCaddy = {
-  addRoute: vi.fn().mockResolvedValue(undefined),
-  removeRoute: vi.fn().mockResolvedValue(undefined),
-};
-
 vi.mock("../proxmox.js", () => ({ createProxmoxClient: () => mockProxmox }));
-vi.mock("../caddy.js", () => ({ createCaddyClient: () => mockCaddy }));
+vi.mock("../proxy.js", () => ({ createProxyRouter: () => () => false }));
 vi.mock("../db.js", () => {
   const devboxes = new Map<string, { id: string; name: string; ip: string | null; proxmox_vmid: number }>();
   const ports = new Map<string, { devbox_id: string; port: number; subdomain: string }>();
@@ -96,7 +91,6 @@ describe("port routes", () => {
     const body = res.json();
     expect(body.subdomain).toBe("my-box-3000");
     expect(body.url).toMatch(/my-box-3000/);
-    expect(mockCaddy.addRoute).toHaveBeenCalledWith("my-box-3000", "10.0.0.100", 3000, expect.any(String));
   });
 
   it("POST /devboxes/:name/ports returns 404 for unknown devbox", async () => {
@@ -133,7 +127,6 @@ describe("port routes", () => {
       headers: { authorization: `Bearer ${TOKEN}` },
     });
     expect(res.statusCode).toBe(204);
-    expect(mockCaddy.removeRoute).toHaveBeenCalledWith("my-box-3000");
   });
 
   it("DELETE /devboxes/:name/ports/:port returns 404 for unknown devbox", async () => {

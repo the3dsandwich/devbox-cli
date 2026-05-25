@@ -11,13 +11,8 @@ const mockProxmox = {
   nextVmid: vi.fn().mockResolvedValue(301),
 };
 
-const mockCaddy = {
-  addRoute: vi.fn().mockResolvedValue(undefined),
-  removeRoute: vi.fn().mockResolvedValue(undefined),
-};
-
 vi.mock("../proxmox.js", () => ({ createProxmoxClient: () => mockProxmox }));
-vi.mock("../caddy.js", () => ({ createCaddyClient: () => mockCaddy }));
+vi.mock("../proxy.js", () => ({ createProxyRouter: () => () => false }));
 vi.mock("../db.js", () => {
   const devboxes = new Map();
   const db = {

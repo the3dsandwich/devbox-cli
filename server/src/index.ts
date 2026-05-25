@@ -1,9 +1,11 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import { createServer } from "http";
 import { createProxmoxClient } from "./proxmox.js";
-import { createCaddyClient } from "./caddy.js";
 import { devboxRoutes } from "./routes/devboxes.js";
 import { portRoutes } from "./routes/ports.js";
+import { createProxyRouter, type ProxyRoute } from "./proxy.js";
+import { getDb } from "./db.js";
 
 const requiredEnv = (key: string): string => {
   const val = process.env[key];
@@ -12,7 +14,7 @@ const requiredEnv = (key: string): string => {
 };
 
 export const buildApp = async () => {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, serverFactory: (handler) => createServer(handler) });
 
   await app.register(cors);
 
@@ -25,10 +27,41 @@ export const buildApp = async () => {
     vmidRangeStart: parseInt(process.env.PROXMOX_VMID_RANGE_START ?? "300", 10),
   });
 
-  const caddy = createCaddyClient(process.env.CADDY_ADMIN_URL ?? "http://localhost:2019");
   const domain = process.env.DEVBOX_DOMAIN ?? "devbox.local";
-
   const token = requiredEnv("API_TOKEN");
+
+  const getRoutes = (): Map<string, ProxyRoute> => {
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `SELECT d.name, d.ip, p.port, p.subdomain
+         FROM exposed_ports p
+         JOIN devboxes d ON d.id = p.devbox_id
+         WHERE d.ip IS NOT NULL`
+      )
+      .all() as Array<{ name: string; ip: string; port: number; subdomain: string }>;
+
+    const map = new Map<string, ProxyRoute>();
+    // devbox root (code-server on 8080)
+    const devboxes = db
+      .prepare("SELECT name, ip FROM devboxes WHERE ip IS NOT NULL")
+      .all() as Array<{ name: string; ip: string }>;
+    for (const d of devboxes) map.set(d.name, { ip: d.ip, port: 8080 });
+    // exposed ports
+    for (const r of rows) map.set(r.subdomain, { ip: r.ip, port: r.port });
+    return map;
+  };
+
+  const proxyRouter = createProxyRouter(getRoutes, domain);
+
+  // proxy middleware runs before auth — unauthenticated devbox traffic passes through
+  app.addHook("onRequest", async (req, reply) => {
+    const handled = proxyRouter(req.raw, reply.raw);
+    if (handled) {
+      // prevent Fastify from processing this request further
+      reply.hijack();
+    }
+  });
 
   app.addHook("onRequest", async (req, reply) => {
     if (req.url === "/health") return;
@@ -38,8 +71,8 @@ export const buildApp = async () => {
 
   app.get("/health", async () => ({ ok: true }));
 
-  await app.register(devboxRoutes, { proxmox, caddy, domain });
-  await app.register(portRoutes, { caddy, domain });
+  await app.register(devboxRoutes, { proxmox, domain });
+  await app.register(portRoutes, { domain });
 
   return app;
 };
