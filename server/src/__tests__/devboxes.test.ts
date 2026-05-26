@@ -12,7 +12,9 @@ const mockProxmox = {
 };
 
 vi.mock("../proxmox.js", () => ({ createProxmoxClient: () => mockProxmox }));
-vi.mock("../proxy.js", () => ({ createProxyRouter: () => () => false }));
+vi.mock("../proxy.js", () => ({
+  createProxyRouter: () => ({ handleHttp: () => false, handleUpgrade: () => false }),
+}));
 vi.mock("../db.js", () => {
   const devboxes = new Map();
   const db = {
