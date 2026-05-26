@@ -11,8 +11,8 @@ vi.mock("http-proxy", () => ({
   },
 }));
 
-const makeReq = (host: string, url = "/") =>
-  ({ headers: { host }, url, socket: {} }) as unknown as IncomingMessage;
+const makeReq = (host: string, url = "/", extraHeaders: Record<string, string> = {}) =>
+  ({ headers: { host, ...extraHeaders }, url, socket: {} }) as unknown as IncomingMessage;
 
 const makeRes = () =>
   ({ writeHead: vi.fn(), end: vi.fn() }) as unknown as ServerResponse;
@@ -79,6 +79,23 @@ describe("createProxyRouter", () => {
 
       expect(handled).toBe(false);
       expect(mockWeb).not.toHaveBeenCalled();
+    });
+
+    it("uses proxy.ws() via raw socket when Upgrade: websocket header is present", () => {
+      const { handleHttp } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("my-box.devbox.local", "/", { upgrade: "websocket" });
+      const res = makeRes();
+
+      const handled = handleHttp(req, res);
+
+      expect(handled).toBe(true);
+      expect(mockWeb).not.toHaveBeenCalled();
+      expect(mockWs).toHaveBeenCalledWith(
+        req,
+        req.socket,
+        expect.any(Buffer),
+        { target: "http://10.0.0.100:8080" }
+      );
     });
   });
 
