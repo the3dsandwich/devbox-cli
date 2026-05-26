@@ -68,6 +68,7 @@ program
     console.log(`${chalk.green("✓")} ${chalk.bold(name)} is running`);
     console.log(`  IP:      ${devbox.ip}`);
     if (devbox.url) console.log(`  VS Code: ${chalk.cyan(devbox.url)}`);
+    console.log(`  Password: ssh ${devbox.ip} "cat ~/.config/code-server/config.yaml"`);
   });
 
 program
