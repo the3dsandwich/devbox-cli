@@ -1,5 +1,6 @@
 import httpProxy from "http-proxy";
 import type { IncomingMessage, ServerResponse } from "http";
+import type { Socket } from "net";
 
 export type ProxyRoute = { ip: string; port: number };
 
@@ -7,20 +8,29 @@ export const createProxyRouter = (
   getRoutes: () => Map<string, ProxyRoute>,
   domain: string
 ) => {
-  const proxy = httpProxy.createProxyServer();
+  const proxy = httpProxy.createProxyServer({ ws: true });
 
-  return (req: IncomingMessage, res: ServerResponse): boolean => {
-    const host = req.headers.host ?? "";
+  const resolveRoute = (host: string): ProxyRoute | undefined => {
     const suffix = `.${domain}`;
-    if (!host.endsWith(suffix)) return false;
-
+    if (!host.endsWith(suffix)) return undefined;
     const subdomain = host.slice(0, host.length - suffix.length);
-    if (!subdomain) return false;
+    if (!subdomain) return undefined;
+    return getRoutes().get(subdomain);
+  };
 
-    const route = getRoutes().get(subdomain);
+  const handleHttp = (req: IncomingMessage, res: ServerResponse): boolean => {
+    const route = resolveRoute(req.headers.host ?? "");
     if (!route) return false;
-
     proxy.web(req, res, { target: `http://${route.ip}:${route.port}` });
     return true;
   };
+
+  const handleUpgrade = (req: IncomingMessage, socket: Socket, head: Buffer): boolean => {
+    const route = resolveRoute(req.headers.host ?? "");
+    if (!route) return false;
+    proxy.ws(req, socket, head, { target: `http://${route.ip}:${route.port}` });
+    return true;
+  };
+
+  return { handleHttp, handleUpgrade };
 };

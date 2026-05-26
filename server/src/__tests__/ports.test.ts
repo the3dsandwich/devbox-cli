@@ -12,7 +12,9 @@ const mockProxmox = {
 };
 
 vi.mock("../proxmox.js", () => ({ createProxmoxClient: () => mockProxmox }));
-vi.mock("../proxy.js", () => ({ createProxyRouter: () => () => false }));
+vi.mock("../proxy.js", () => ({
+  createProxyRouter: () => ({ handleHttp: () => false, handleUpgrade: () => false }),
+}));
 vi.mock("../db.js", () => {
   const devboxes = new Map<string, { id: string; name: string; ip: string | null; proxmox_vmid: number }>();
   const ports = new Map<string, { devbox_id: string; port: number; subdomain: string }>();

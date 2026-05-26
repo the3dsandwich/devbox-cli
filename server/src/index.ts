@@ -52,11 +52,16 @@ export const buildApp = async () => {
     return map;
   };
 
-  const proxyRouter = createProxyRouter(getRoutes, domain);
+  const { handleHttp, handleUpgrade } = createProxyRouter(getRoutes, domain);
+
+  // WebSocket upgrades never reach Fastify hooks — handle at the raw server level
+  app.server.on("upgrade", (req, socket, head) => {
+    handleUpgrade(req, socket as import("net").Socket, head);
+  });
 
   // proxy middleware runs before auth — unauthenticated devbox traffic passes through
   app.addHook("onRequest", async (req, reply) => {
-    const handled = proxyRouter(req.raw, reply.raw);
+    const handled = handleHttp(req.raw, reply.raw);
     if (handled) {
       // prevent Fastify from processing this request further
       reply.hijack();

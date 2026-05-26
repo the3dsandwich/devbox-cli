@@ -1,24 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { IncomingMessage, ServerResponse } from "http";
+import type { Socket } from "net";
 import { createProxyRouter } from "../proxy.js";
 
 const mockWeb = vi.fn();
+const mockWs = vi.fn();
 vi.mock("http-proxy", () => ({
   default: {
-    createProxyServer: () => ({ web: mockWeb }),
+    createProxyServer: () => ({ web: mockWeb, ws: mockWs }),
   },
 }));
 
 const makeReq = (host: string, url = "/") =>
   ({ headers: { host }, url, socket: {} }) as unknown as IncomingMessage;
 
-const makeRes = () => {
-  const res = {
-    writeHead: vi.fn(),
-    end: vi.fn(),
-  } as unknown as ServerResponse;
-  return res;
-};
+const makeRes = () =>
+  ({ writeHead: vi.fn(), end: vi.fn() }) as unknown as ServerResponse;
+
+const makeSocket = () => ({ destroy: vi.fn() }) as unknown as Socket;
 
 const routes = new Map([
   ["my-box", { ip: "10.0.0.100", port: 8080 }],
@@ -28,56 +27,108 @@ const routes = new Map([
 beforeEach(() => vi.clearAllMocks());
 
 describe("createProxyRouter", () => {
-  it("proxies request matching a known subdomain", () => {
-    const router = createProxyRouter(() => routes, "devbox.local");
-    const req = makeReq("my-box.devbox.local");
-    const res = makeRes();
+  describe("handleHttp", () => {
+    it("proxies request matching a known subdomain", () => {
+      const { handleHttp } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("my-box.devbox.local");
+      const res = makeRes();
 
-    router(req, res);
+      handleHttp(req, res);
 
-    expect(mockWeb).toHaveBeenCalledWith(req, res, { target: "http://10.0.0.100:8080" });
+      expect(mockWeb).toHaveBeenCalledWith(req, res, { target: "http://10.0.0.100:8080" });
+    });
+
+    it("proxies port-exposed subdomain", () => {
+      const { handleHttp } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("my-box-3000.devbox.local");
+      const res = makeRes();
+
+      handleHttp(req, res);
+
+      expect(mockWeb).toHaveBeenCalledWith(req, res, { target: "http://10.0.0.100:3000" });
+    });
+
+    it("returns false for unknown subdomain", () => {
+      const { handleHttp } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("ghost.devbox.local");
+      const res = makeRes();
+
+      const handled = handleHttp(req, res);
+
+      expect(handled).toBe(false);
+      expect(mockWeb).not.toHaveBeenCalled();
+    });
+
+    it("returns false when host does not match domain", () => {
+      const { handleHttp } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("my-box.other.com");
+      const res = makeRes();
+
+      const handled = handleHttp(req, res);
+
+      expect(handled).toBe(false);
+      expect(mockWeb).not.toHaveBeenCalled();
+    });
+
+    it("returns false when host header is absent", () => {
+      const { handleHttp } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("");
+      const res = makeRes();
+
+      const handled = handleHttp(req, res);
+
+      expect(handled).toBe(false);
+      expect(mockWeb).not.toHaveBeenCalled();
+    });
   });
 
-  it("proxies port-exposed subdomain", () => {
-    const router = createProxyRouter(() => routes, "devbox.local");
-    const req = makeReq("my-box-3000.devbox.local");
-    const res = makeRes();
+  describe("handleUpgrade", () => {
+    it("proxies WebSocket upgrade for known subdomain", () => {
+      const { handleUpgrade } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("my-box.devbox.local");
+      const socket = makeSocket();
+      const head = Buffer.alloc(0);
 
-    router(req, res);
+      const handled = handleUpgrade(req, socket, head);
 
-    expect(mockWeb).toHaveBeenCalledWith(req, res, { target: "http://10.0.0.100:3000" });
-  });
+      expect(handled).toBe(true);
+      expect(mockWs).toHaveBeenCalledWith(req, socket, head, { target: "http://10.0.0.100:8080" });
+    });
 
-  it("returns false for unknown subdomain", () => {
-    const router = createProxyRouter(() => routes, "devbox.local");
-    const req = makeReq("ghost.devbox.local");
-    const res = makeRes();
+    it("proxies WebSocket upgrade for port-exposed subdomain", () => {
+      const { handleUpgrade } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("my-box-3000.devbox.local");
+      const socket = makeSocket();
+      const head = Buffer.alloc(0);
 
-    const handled = router(req, res);
+      const handled = handleUpgrade(req, socket, head);
 
-    expect(handled).toBe(false);
-    expect(mockWeb).not.toHaveBeenCalled();
-  });
+      expect(handled).toBe(true);
+      expect(mockWs).toHaveBeenCalledWith(req, socket, head, { target: "http://10.0.0.100:3000" });
+    });
 
-  it("returns false when host does not match domain", () => {
-    const router = createProxyRouter(() => routes, "devbox.local");
-    const req = makeReq("my-box.other.com");
-    const res = makeRes();
+    it("returns false for unknown subdomain on upgrade", () => {
+      const { handleUpgrade } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("ghost.devbox.local");
+      const socket = makeSocket();
+      const head = Buffer.alloc(0);
 
-    const handled = router(req, res);
+      const handled = handleUpgrade(req, socket, head);
 
-    expect(handled).toBe(false);
-    expect(mockWeb).not.toHaveBeenCalled();
-  });
+      expect(handled).toBe(false);
+      expect(mockWs).not.toHaveBeenCalled();
+    });
 
-  it("returns false when host header is absent", () => {
-    const router = createProxyRouter(() => routes, "devbox.local");
-    const req = makeReq("");
-    const res = makeRes();
+    it("returns false when host does not match domain on upgrade", () => {
+      const { handleUpgrade } = createProxyRouter(() => routes, "devbox.local");
+      const req = makeReq("my-box.other.com");
+      const socket = makeSocket();
+      const head = Buffer.alloc(0);
 
-    const handled = router(req, res);
+      const handled = handleUpgrade(req, socket, head);
 
-    expect(handled).toBe(false);
-    expect(mockWeb).not.toHaveBeenCalled();
+      expect(handled).toBe(false);
+      expect(mockWs).not.toHaveBeenCalled();
+    });
   });
 });
