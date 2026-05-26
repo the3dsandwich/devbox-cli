@@ -21,7 +21,13 @@ export const createProxyRouter = (
   const handleHttp = (req: IncomingMessage, res: ServerResponse): boolean => {
     const route = resolveRoute(req.headers.host ?? "");
     if (!route) return false;
-    proxy.web(req, res, { target: `http://${route.ip}:${route.port}` });
+    // cloudflared forwards WebSocket upgrades as regular HTTP requests rather than
+    // emitting a Node 'upgrade' event — detect and handle them via proxy.ws()
+    if (req.headers.upgrade?.toLowerCase() === "websocket") {
+      proxy.ws(req, req.socket as Socket, Buffer.alloc(0), { target: `http://${route.ip}:${route.port}` });
+    } else {
+      proxy.web(req, res, { target: `http://${route.ip}:${route.port}` });
+    }
     return true;
   };
 
