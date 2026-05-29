@@ -52,7 +52,7 @@ export const buildApp = async () => {
     return map;
   };
 
-  const { handleHttp, handleUpgrade } = createProxyRouter(getRoutes, domain);
+  const { handleHttp, handleUpgrade } = createProxyRouter(getRoutes, domain, app.log);
 
   // WebSocket upgrades never reach Fastify hooks — handle at the raw server level
   app.server.on("upgrade", (req, socket, head) => {

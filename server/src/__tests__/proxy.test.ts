@@ -5,9 +5,10 @@ import { createProxyRouter } from "../proxy.js";
 
 const mockWeb = vi.fn();
 const mockWs = vi.fn();
+const mockOn = vi.fn();
 vi.mock("http-proxy", () => ({
   default: {
-    createProxyServer: () => ({ web: mockWeb, ws: mockWs }),
+    createProxyServer: () => ({ web: mockWeb, ws: mockWs, on: mockOn }),
   },
 }));
 
