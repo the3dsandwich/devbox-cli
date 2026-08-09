@@ -9,9 +9,13 @@ vi.mock("child_process", () => ({
 const mockExecFileSync = vi.mocked(execFileSync);
 
 const originalLang = process.env.LANG;
+let logSpy: ReturnType<typeof vi.spyOn>;
+
+const loggedMessages = () => logSpy.mock.calls.map((c) => String(c[0]));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -35,6 +39,9 @@ describe("resolveSshTarget", () => {
       ["weiwei@10.0.0.1", "command -v mosh-server"],
       { stdio: "ignore", timeout: 5000 },
     );
+    const messages = loggedMessages();
+    expect(messages.some((m) => /checking devbox for mosh support/.test(m))).toBe(true);
+    expect(messages.some((m) => /upgrading connection/.test(m))).toBe(true);
   });
 
   it("preserves an already-UTF-8 LANG instead of overriding it", () => {
@@ -56,6 +63,7 @@ describe("resolveSshTarget", () => {
 
     expect(target).toEqual({ bin: "ssh", args: ["weiwei@10.0.0.1"] });
     expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+    expect(logSpy).not.toHaveBeenCalled();
   });
 
   it("falls back to ssh when mosh is installed locally but not on the remote", () => {
@@ -67,6 +75,8 @@ describe("resolveSshTarget", () => {
     const target = resolveSshTarget("weiwei", "10.0.0.1");
 
     expect(target).toEqual({ bin: "ssh", args: ["weiwei@10.0.0.1"] });
+    const messages = loggedMessages();
+    expect(messages.some((m) => /falling back to ssh/.test(m))).toBe(true);
   });
 
   it("falls back to ssh when neither side has mosh", () => {
