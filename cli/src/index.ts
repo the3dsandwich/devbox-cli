@@ -128,7 +128,7 @@ program
     const target = opts.mosh
       ? resolveSshTarget("weiwei", devbox.ip)
       : { bin: "ssh", args: [`weiwei@${devbox.ip}`] };
-    execFileSync(target.bin, target.args, { stdio: "inherit" });
+    execFileSync(target.bin, target.args, { stdio: "inherit", env: target.env ?? process.env });
   });
 
 const statusColor = (status: string) => {
