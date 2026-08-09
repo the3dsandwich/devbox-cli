@@ -6,6 +6,7 @@ import { login } from "./commands/login.js";
 import { getApiClient } from "./api.js";
 import { getSshKey } from "./config.js";
 import { withSpinner } from "./spinner.js";
+import { resolveSshTarget } from "./ssh.js";
 
 const program = new Command();
 
@@ -118,12 +119,16 @@ program
 
 program
   .command("ssh <name>")
-  .description("SSH into a devbox")
-  .action(async (name: string) => {
+  .description("SSH into a devbox (uses mosh automatically when available on both ends)")
+  .option("--no-mosh", "always use plain ssh")
+  .action(async (name: string, opts: { mosh: boolean }) => {
     const devbox = await getApiClient().get(name).catch(die);
     if (!devbox.ip) { console.error("Devbox has no IP yet."); process.exit(1); }
     const { execFileSync } = await import("child_process");
-    execFileSync("ssh", [`weiwei@${devbox.ip}`], { stdio: "inherit" });
+    const target = opts.mosh
+      ? resolveSshTarget("weiwei", devbox.ip)
+      : { bin: "ssh", args: [`weiwei@${devbox.ip}`] };
+    execFileSync(target.bin, target.args, { stdio: "inherit" });
   });
 
 const statusColor = (status: string) => {
